@@ -1,0 +1,17 @@
+android_ingestion:
+  platforms:
+    - phone
+    - tablet
+    - watch
+    - chromebook
+    - tv
+  pg_url:
+    dev: postgresql+psycopg2://buildaz:buildazio@localhost:5432/app_reporter
+  serpapi_params:
+    engine: google_play_product
+    store: apps
+    all_reviews: 'true'
+    sort_by: 2
+    num: 199
+  destiny_bucket:
+    dev: /home/symon/Documents/buildaz/app_reporter/data_pipeline_repository/dev_buckets/bronze/
