@@ -1,0 +1,6 @@
+serpapi==0.1.5
+pandas==2.3.0
+python-dotenv==1.1.1
+sqlalchemy==2.0.42
+psycopg2-binary==2.9.10
+pyarrow==20.0.0

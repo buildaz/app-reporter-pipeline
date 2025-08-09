@@ -1,0 +1,9 @@
+.env
+test_*.ipynb
+postgres_data/
+__pycache__
+.ipynb_checkpoints/
+dev_buckets/
+.venv/
+db/*.json
+!db/*.example.json
