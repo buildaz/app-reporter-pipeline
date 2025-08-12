@@ -4,6 +4,8 @@ import os
 
 import dotenv
 import pandas as pd
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import lit
 import serpapi
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -11,8 +13,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, String, Date, PrimaryKeyConstraint
 import yaml
 
-
 dotenv.load_dotenv()
+
 
 LOGGER = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -20,6 +22,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 with open('config.yaml', 'r') as file:
     MODULE_NAME = os.path.basename(__file__).replace('.py', '')
     CONFIG = yaml.safe_load(file)[MODULE_NAME]
+
+spark = SparkSession.builder \
+    .appName("app_reporter_android_ingestion") \
+    .master(CONFIG['spark_master'][os.getenv('RUNTIME', 'dev')]) \
+    .getOrCreate()
 
 pgsql = create_engine(CONFIG['pg_url'].get(os.getenv('RUNTIME', 'dev')), echo=True, pool_pre_ping=True)
 Session = sessionmaker(bind=pgsql)
@@ -56,10 +63,10 @@ if __name__ == "__main__":
     if not android_apps:
         LOGGER.info("No Android apps found in the database.")
         exit(0)
-    temp_dfs = list()
+    df = None
     for platform in CONFIG['platforms']:
         for app in android_apps:
-            LOGGER.info(f"Fetching data for {app.name} ({app.id}) in {app.country}-{app.lang} for platform {platform}")
+            LOGGER.info(f"Fetching data for {app.name} ({app.id}) in {app.country}-{app.lang} for platform {platform} since {app.last_ingestion}")
             pagination_token = None
             while True:
                 params = {
@@ -84,28 +91,33 @@ if __name__ == "__main__":
                 if not filtered_reviews:
                     LOGGER.info(f"No reviews found for {app.name} ({app.id}) in {app.country}-{app.lang} before last ingestion date.")
                     break
-                temp_dfs.append(pd.DataFrame([
+                temp_df = pd.DataFrame([
                     {
                         'review_id': review['id'],
                         'title': review['title'],
                         'rating': review['rating'],
                         'iso_date': review['iso_date'],
-                        'content': review['snippet'],
+                        'content': review.get('snippet', ''),
                         'app_id': app.id,
                         'lang': app.lang,
                         'country': app.country,
                         'platform': platform,
                     } for review in result['reviews']
-                ]))
+                ])
+                if df is None:
+                    df = spark.createDataFrame(temp_df)
+                else:
+                    temp_spark = spark.createDataFrame(temp_df)
+                    df = df.union(temp_spark)
                 pagination_token = result.get('serpapi_pagination', {}).get('next_page_token')
                 if not pagination_token: break
 
-    if temp_dfs:
-        df = pd.concat(temp_dfs, ignore_index=True)
-
+    df = df.withColumn('fetched_at', lit(INGESTION_TIMESTAMP.strftime('%Y-%m-%d %H:%M:%S')))
     destiny_bucket = CONFIG['destiny_bucket'].get(os.getenv('RUNTIME', 'dev'))
     LOGGER.info(f"Saving data to {destiny_bucket} at {INGESTION_TIMESTAMP.strftime('%Y%m%d_%H%M%S')}.parquet")
-    df.to_parquet(f'{destiny_bucket}/{BUCKET_PREFIX}/{INGESTION_TIMESTAMP.strftime("%Y%m%d_%H%M%S")}.parquet', index=False)
+    df.write \
+        .partitionBy('fetched_at') \
+        .parquet(f'{destiny_bucket}/{BUCKET_PREFIX}/{INGESTION_TIMESTAMP.strftime("%Y%m%d_%H%M%S")}.parquet')
 
     session.query(AndroidApp).update(
         {

@@ -15,3 +15,5 @@ android_ingestion:
     num: 199
   destiny_bucket:
     dev: /home/symon/Documents/buildaz/app_reporter/data_pipeline_repository/dev_buckets/bronze/
+  spark_master:
+    dev: local[5]
