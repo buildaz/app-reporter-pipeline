@@ -1,11 +1,12 @@
-serpapi==0.1.5
+google-cloud-storage==3.3.0
 pandas==2.3.0
 pyspark==4.0.0
-sqlalchemy==2.0.42
-psycopg2-binary==2.9.10
+# sqlalchemy==2.0.42
+# psycopg2-binary==2.9.10
 pyarrow==20.0.0
 PyYAML==6.0.2
+serpapi==0.1.5
 
 # dev dependencies
-python-dotenv==1.1.1
+# python-dotenv==1.1.1
 notebook==7.4.5

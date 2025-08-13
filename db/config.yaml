@@ -1,3 +1,0 @@
-dev_pgsql:
-  pg_url:
-    dev: postgresql+psycopg2://buildaz:buildazio@localhost:5432/app_reporter

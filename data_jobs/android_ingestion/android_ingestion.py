@@ -1,20 +1,11 @@
 from datetime import datetime, timezone, timedelta
+import json
 import logging
 import os
 
-import dotenv
-import pandas as pd
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import lit
+from google.cloud import storage
 import serpapi
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Date, PrimaryKeyConstraint
 import yaml
-
-dotenv.load_dotenv()
-
 
 LOGGER = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -23,35 +14,10 @@ with open('config.yaml', 'r') as file:
     MODULE_NAME = os.path.basename(__file__).replace('.py', '')
     CONFIG = yaml.safe_load(file)[MODULE_NAME]
 
-spark = SparkSession.builder \
-    .appName("app_reporter_android_ingestion") \
-    .master(CONFIG['spark_master'][os.getenv('RUNTIME', 'dev')]) \
-    .getOrCreate()
-
-pgsql = create_engine(CONFIG['pg_url'].get(os.getenv('RUNTIME', 'dev')), echo=True, pool_pre_ping=True)
-Session = sessionmaker(bind=pgsql)
-session = Session()
-
-Base = declarative_base()
-
 SERP_CLIENT = serpapi.Client(api_key=os.getenv('SERPAPI_KEY'))
-
-class AndroidApp(Base):
-    __tablename__ = 'android_apps'
-
-    id = Column(String, primary_key=True, index=True, nullable=False)
-    lang = Column(String, nullable=False)
-    country = Column(String, nullable=False)
-
-    name = Column(String, nullable=False)
-    peer_group = Column(String, nullable=False)
-    last_ingestion = Column(Date, nullable=True)
-    created_at = Column(Date, default=datetime.now(timezone(offset=timedelta(hours=-3))), nullable=False)
-
-    __table_args__ = (
-        PrimaryKeyConstraint('id', 'lang', 'country', name='pk_android_apps'),
-        {'extend_existing': True}
-    )
+GCS = storage.Client()
+LANDING_BUCKET = GCS.bucket(CONFIG['landing_bucket'][os.getenv('RUNTIME', 'dev')])
+BRONZE_BUCKET = GCS.bucket(CONFIG['bronze_bucket'][os.getenv('RUNTIME', 'dev')])
 
 INGESTION_TIMESTAMP = datetime.now(timezone(offset=timedelta(hours=-3)))
 LOGGER.info(f"Starting ingestion at {INGESTION_TIMESTAMP.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -59,28 +25,39 @@ LOGGER.info(f"Starting ingestion at {INGESTION_TIMESTAMP.strftime('%Y-%m-%d %H:%
 BUCKET_PREFIX = 'android_reviews'
 
 if __name__ == "__main__":
-    android_apps = session.query(AndroidApp).all()
-    if not android_apps:
-        LOGGER.info("No Android apps found in the database.")
-        exit(0)
-    df = None
-    for platform in CONFIG['platforms']:
-        for app in android_apps:
-            LOGGER.info(f"Fetching data for {app.name} ({app.id}) in {app.country}-{app.lang} for platform {platform} since {app.last_ingestion}")
+    landing_metadata_blob = LANDING_BUCKET.blob(CONFIG['landing_metadata'])
+    if landing_metadata_blob.exists():
+        landing_metadata = json.loads(landing_metadata_blob.download_as_text())
+        LOGGER.info(f"Found {len(landing_metadata)} Android apps in the landing metadata")
+    else:
+        LOGGER.info("No new Android apps found in the landing database")
+    bronze_metadata_blob = BRONZE_BUCKET.blob(CONFIG['bronze_metadata'])
+    if bronze_metadata_blob.exists():
+        bronze_metadata = json.loads(bronze_metadata_blob.download_as_text())
+        LOGGER.info(f"Found {len(bronze_metadata)} Android apps in the bronze metadata")
+    else:
+        bronze_metadata = list()
+        LOGGER.info("No Android apps found in the bronze database, starting fresh ingestion")
+    metadata = bronze_metadata + landing_metadata
+
+    for app in metadata:
+        for platform in CONFIG['platforms']:
+            LOGGER.info(f"Fetching data for {app['name']} ({app['id']}) in {app['country']}-{app['lang']} since {app['last_ingestion']}")
             pagination_token = None
+            all_reviews = list()
             while True:
                 params = {
                     **CONFIG['serpapi_params'],
-                    'product_id': app.id,
-                    'gl': app.country,
-                    'hl': app.lang,
-                    'platform': platform
+                    'product_id': app['id'],
+                    'gl': app['country'],
+                    'hl': app['lang'],
+                    'platform': 'phone'
                 }
                 if pagination_token:
                     params['next_page_token'] = pagination_token
                 result = SERP_CLIENT.search(params=params)
                 if 'error' in result:
-                    LOGGER.error(f"Error fetching data for {app.name} in platform {platform}: {result['error']}")
+                    LOGGER.error(f"Error fetching data for {app.name}: {result['error']}")
                     break
                 filtered_reviews = list(
                     filter(
@@ -91,40 +68,34 @@ if __name__ == "__main__":
                 if not filtered_reviews:
                     LOGGER.info(f"No reviews found for {app.name} ({app.id}) in {app.country}-{app.lang} before last ingestion date.")
                     break
-                temp_df = pd.DataFrame([
+                reviews = [
                     {
                         'review_id': review['id'],
                         'title': review['title'],
                         'rating': review['rating'],
                         'iso_date': review['iso_date'],
                         'content': review.get('snippet', ''),
-                        'app_id': app.id,
-                        'lang': app.lang,
-                        'country': app.country,
+                        'app_id': app['id'],
+                        'lang': app['lang'],
+                        'country': app['country'],
                         'platform': platform,
                     } for review in result['reviews']
-                ])
-                if df is None:
-                    df = spark.createDataFrame(temp_df)
-                else:
-                    temp_spark = spark.createDataFrame(temp_df)
-                    df = df.union(temp_spark)
-                pagination_token = result.get('serpapi_pagination', {}).get('next_page_token')
-                if not pagination_token: break
+                ]
+                all_reviews.extend(reviews)
+                LOGGER.info(f"Fetched {len(reviews)} reviews for {app.name} ({app.id})")
+                pagination_token = result.get('next_page_token')
+                if not pagination_token:
+                    break
+            if all_reviews:
+                blob_path = f"{BUCKET_PREFIX}/{INGESTION_TIMESTAMP.strftime('%Y-%m-%d')}/{app['id']}_{app['country']}_{app['lang']}.json"
+                blob = LANDING_BUCKET.blob(blob_path)
+                blob.upload_from_string(json.dumps(all_reviews, ensure_ascii=False, indent=4), content_type='application/json')
+                LOGGER.info(f"Uploaded {len(all_reviews)} reviews for {app['name']} ({app['id']}) to {blob_path}")
+            else:
+                LOGGER.info(f"No new reviews to upload for {app['name']} ({app['id']})")
 
-    df = df.withColumn('fetched_at', lit(INGESTION_TIMESTAMP.strftime('%Y-%m-%d %H:%M:%S')))
-    destiny_bucket = CONFIG['destiny_bucket'].get(os.getenv('RUNTIME', 'dev'))
-    LOGGER.info(f"Saving data to {destiny_bucket} at {INGESTION_TIMESTAMP.strftime('%Y%m%d_%H%M%S')}.parquet")
-    df.write \
-        .partitionBy('fetched_at') \
-        .parquet(f'{destiny_bucket}/{BUCKET_PREFIX}/{INGESTION_TIMESTAMP.strftime("%Y%m%d_%H%M%S")}.parquet')
-
-    session.query(AndroidApp).update(
-        {
-            AndroidApp.last_ingestion: INGESTION_TIMESTAMP.date(),
-        },
-        synchronize_session=False
-    )
-    session.commit()
-
-    LOGGER.info("Ingestion completed successfully.")
+    for app in landing_metadata:
+        app['last_ingestion'] = INGESTION_TIMESTAMP.strftime('%Y-%m-%dT%H:%M:%SZ')
+    bronze_metadata_blob = BRONZE_BUCKET.blob(CONFIG['bronze_metadata'])
+    bronze_metadata_blob.upload_from_string(json.dumps(bronze_metadata, ensure_ascii=False, indent=4), content_type='application/json')
+    LOGGER.info(f"Updated bronze metadata with {len(landing_metadata)} apps")
