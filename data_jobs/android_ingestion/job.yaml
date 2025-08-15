@@ -1,0 +1,18 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: app-reporter-android-ingestion
+  namespace: site-reporter-436515
+  labels:
+    cloud.googleapis.com/location: southamerica-east1
+spec:
+  template:
+    spec:
+      template:
+        spec:
+          containers:
+          - image: app-reporter-android-ingestion:latest
+            args:
+              - name: RUNTIME
+                value: dev
+              - name: SERPAPI_KEY
