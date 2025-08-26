@@ -1,5 +1,5 @@
 docker build -t app-reporter-android-ingestion:latest .
-docker tag app-reporter-android-ingestion:latest gcr.io/site-reporter-436515/app-reporter-android-ingestion:latest
-docker push gcr.io/site-reporter-436515/app-reporter-android-ingestion:latest --location=southamerica-east1
+docker tag app-reporter-android-ingestion:latest southamerica-east1-docker.pkg.dev/site-reporter-436515/app-reporter-artifacts/app-reporter-android-ingestion:latest
+docker push southamerica-east1-docker.pkg.dev/site-reporter-436515/app-reporter-artifacts/app-reporter-android-ingestion:latest
 
-# gcloud run jobs replace job.yaml
+envsubst < job.yaml | gcloud run jobs replace -

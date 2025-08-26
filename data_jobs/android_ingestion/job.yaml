@@ -11,8 +11,9 @@ spec:
       template:
         spec:
           containers:
-          - image: app-reporter-android-ingestion:latest
-            args:
+          - image: southamerica-east1-docker.pkg.dev/site-reporter-436515/app-reporter-artifacts/app-reporter-android-ingestion:latest
+            env:
               - name: RUNTIME
-                value: dev
+                value: ${RUNTIME}
               - name: SERPAPI_KEY
+                value: ${SERPAPI_KEY}
