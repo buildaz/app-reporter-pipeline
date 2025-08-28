@@ -1,0 +1,10 @@
+ios_ingestion:
+  serpapi_params:
+    engine: apple_reviews
+    sort: mostrecent
+  landing_bucket:
+    dev: buildaz-app-reporter-landing-dev
+  bronze_bucket:
+    dev: buildaz-app-reporter-bronze-dev
+  landing_metadata: ios_apps/ios_apps.json
+  bronze_metadata: ios_apps/bronze_metadata.json
