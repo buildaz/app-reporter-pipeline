@@ -30,6 +30,7 @@ if __name__ == "__main__":
         landing_metadata = json.loads(landing_metadata_blob.download_as_text())
         LOGGER.info(f"Found {len(landing_metadata)} Android apps in the landing metadata")
     else:
+        landing_metadata = list()
         LOGGER.info("No new Android apps found in the landing database")
     bronze_metadata_blob = BRONZE_BUCKET.blob(CONFIG['bronze_metadata'])
     if bronze_metadata_blob.exists():
@@ -39,12 +40,16 @@ if __name__ == "__main__":
         bronze_metadata = list()
         LOGGER.info("No Android apps found in the bronze database, starting fresh ingestion")
     metadata = bronze_metadata + landing_metadata
+    if not metadata:
+        LOGGER.info("No Android apps to process, exiting.")
+        exit(0)
 
     for app in metadata:
+        app_last_ingestion = datetime.strptime(app['last_ingestion'], '%Y-%m-%d')
+        all_reviews = list()
         for platform in CONFIG['platforms']:
-            LOGGER.info(f"Fetching data for {app['name']} ({app['id']}) in {app['country']}-{app['lang']} since {app['last_ingestion']}")
+            LOGGER.info(f"Fetching data for {app['name']} ({app['id']}) in {app['country']}-{app['lang']} since {app['last_ingestion']} for platform {platform}")
             pagination_token = None
-            all_reviews = list()
             while True:
                 params = {
                     **CONFIG['serpapi_params'],
@@ -57,16 +62,16 @@ if __name__ == "__main__":
                     params['next_page_token'] = pagination_token
                 result = SERP_CLIENT.search(params=params)
                 if 'error' in result:
-                    LOGGER.error(f"Error fetching data for {app.name}: {result['error']}")
+                    LOGGER.error(f"Error fetching data for {app['name']}: {result['error']}")
                     break
                 filtered_reviews = list(
                     filter(
-                        lambda review: datetime.strptime(review['iso_date'], '%Y-%m-%dT%H:%M:%SZ').date() < app.last_ingestion.date(),
+                        lambda review: datetime.strptime(review['iso_date'], '%Y-%m-%dT%H:%M:%SZ').date() > app_last_ingestion.date(),
                         result['reviews']
                     )
                 )
                 if not filtered_reviews:
-                    LOGGER.info(f"No reviews found for {app.name} ({app.id}) in {app.country}-{app.lang} before last ingestion date.")
+                    LOGGER.info(f"No reviews found for {app['name']} ({app['id']}) in {app['country']}-{app['lang']} before last ingestion date.")
                     break
                 reviews = [
                     {
@@ -85,20 +90,24 @@ if __name__ == "__main__":
                     } for review in result['reviews']
                 ]
                 all_reviews.extend(reviews)
-                LOGGER.info(f"Fetched {len(reviews)} reviews for {app.name} ({app.id})")
-                pagination_token = result.get('next_page_token')
+                LOGGER.info(f"Fetched {len(reviews)} reviews for {app['name']} ({app['id']})")
+                pagination_token = result.get('serpapi_pagination', dict()).get('next_page_token')
                 if not pagination_token:
+                    LOGGER.info(f"All reviews fetched for {app['name']} ({app['id']})")
                     break
-            if all_reviews:
-                blob_path = f"{BUCKET_PREFIX}/{INGESTION_TIMESTAMP.strftime('%Y-%m-%d')}/{app['id']}_{app['country']}_{app['lang']}.json"
-                blob = LANDING_BUCKET.blob(blob_path)
-                blob.upload_from_string(json.dumps(all_reviews, ensure_ascii=False, indent=4), content_type='application/json')
-                LOGGER.info(f"Uploaded {len(all_reviews)} reviews for {app['name']} ({app['id']}) to {blob_path}")
-            else:
-                LOGGER.info(f"No new reviews to upload for {app['name']} ({app['id']})")
+        if all_reviews:
+            blob_path = f"{BUCKET_PREFIX}/{INGESTION_TIMESTAMP.strftime('%Y-%m-%d')}/{app['id']}_{app['country']}_{app['lang']}.json"
+            blob = BRONZE_BUCKET.blob(blob_path)
+            blob.upload_from_string(json.dumps(all_reviews, ensure_ascii=False, indent=4), content_type='application/json')
+            LOGGER.info(f"Uploaded {len(all_reviews)} reviews for {app['name']} ({app['id']}) to {blob_path}")
+        else:
+            LOGGER.info(f"No new reviews to upload for {app['name']} ({app['id']})")
 
-    for app in landing_metadata:
-        app['last_ingestion'] = INGESTION_TIMESTAMP.strftime('%Y-%m-%dT%H:%M:%SZ')
-    bronze_metadata_blob = BRONZE_BUCKET.blob(CONFIG['bronze_metadata'])
-    bronze_metadata_blob.upload_from_string(json.dumps(bronze_metadata, ensure_ascii=False, indent=4), content_type='application/json')
-    LOGGER.info(f"Updated bronze metadata with {len(landing_metadata)} apps")
+    for app in metadata:
+        app['last_ingestion'] = INGESTION_TIMESTAMP.strftime('%Y-%m-%d')
+    bronze_metadata_blob.upload_from_string(json.dumps(metadata, ensure_ascii=False, indent=4), content_type='application/json')
+    LOGGER.info(f"Updated bronze metadata with {len(metadata)} apps")
+
+    if landing_metadata_blob.exists():
+        landing_metadata_blob.delete()
+        LOGGER.info("Cleared landing metadata after successful ingestion")

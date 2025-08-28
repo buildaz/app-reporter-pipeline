@@ -17,3 +17,6 @@ spec:
                 value: ${RUNTIME}
               - name: SERPAPI_KEY
                 value: ${SERPAPI_KEY}
+            resources:
+              limits:
+                memory: 2Gi
