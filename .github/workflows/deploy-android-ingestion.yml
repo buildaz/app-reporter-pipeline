@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'data_jobs/android_ingestion/**'
+  workflow_dispatch:
 
 env:
   PROJECT_ID: site-reporter-436515
