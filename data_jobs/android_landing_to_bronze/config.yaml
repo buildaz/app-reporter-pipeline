@@ -1,0 +1,7 @@
+android_landing_to_bronze:
+  landing_bucket:
+    dev: buildaz-app-reporter-landing-dev
+  bronze_bucket:
+    dev: buildaz-app-reporter-bronze-dev
+  bucket_prefix: android_reviews
+  bronze_metadata: android_apps/bronze_metadata.json
