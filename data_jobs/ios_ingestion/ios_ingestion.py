@@ -48,7 +48,10 @@ if __name__ == '__main__':
     else:
         bronze_metadata = list()
         LOGGER.info("No iOS apps found in the bronze database, starting fresh ingestion")
-    metadata = bronze_metadata + landing_metadata
+    bronze_dict = {app['id']: app for app in bronze_metadata}
+    landing_dict = {app['id']: app for app in landing_metadata}
+    bronze_dict.update(landing_dict)
+    metadata = list(bronze_dict.values())
     if not metadata:
         LOGGER.info("No iOS apps to process, exiting.")
         exit(0)
