@@ -19,9 +19,7 @@ RUNTIME=dev # make sure it is set to `dev`
 export $(cat .env | xargs)
 ```
 
-4. Execute the `deploy.sh` script.
-
-5. For local running, execute steps 1-3 and run the script locally. Make sure to use a Python `venv`
+4. Run the script locally. Make sure to use a Python `venv`
 with the dependencies specified at the project root folder's `requirements.txt`.
 
 ```bash
