@@ -1,0 +1,19 @@
+android_ingestion:
+  platforms:
+    - phone
+    - tablet
+    - watch
+    - chromebook
+    - tv
+  serpapi_params:
+    engine: google_play_product
+    store: apps
+    all_reviews: 'true'
+    sort_by: 2
+    num: 199
+  landing_bucket:
+    dev: buildaz-app-reporter-landing-dev
+  bronze_bucket:
+    dev: buildaz-app-reporter-bronze-dev
+  landing_metadata: android_apps/android_apps.json
+  bronze_metadata: android_apps/bronze_metadata.json
