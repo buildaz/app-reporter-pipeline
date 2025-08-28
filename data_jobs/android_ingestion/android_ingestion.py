@@ -97,7 +97,7 @@ if __name__ == "__main__":
                     break
         if all_reviews:
             blob_path = f"{BUCKET_PREFIX}/{INGESTION_TIMESTAMP.strftime('%Y-%m-%d')}/{app['id']}_{app['country']}_{app['lang']}.json"
-            blob = BRONZE_BUCKET.blob(blob_path)
+            blob = LANDING_BUCKET.blob(blob_path)
             blob.upload_from_string(json.dumps(all_reviews, ensure_ascii=False, indent=4), content_type='application/json')
             LOGGER.info(f"Uploaded {len(all_reviews)} reviews for {app['name']} ({app['id']}) to {blob_path}")
         else:
