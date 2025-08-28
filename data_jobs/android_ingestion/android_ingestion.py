@@ -45,6 +45,7 @@ if __name__ == "__main__":
         exit(0)
 
     for app in metadata:
+        if not app['active']: continue
         app_last_ingestion = datetime.strptime(app['last_ingestion'], '%Y-%m-%d')
         all_reviews = list()
         for platform in CONFIG['platforms']:
@@ -103,10 +104,11 @@ if __name__ == "__main__":
         else:
             LOGGER.info(f"No new reviews to upload for {app['name']} ({app['id']})")
 
-    for app in metadata:
+    active_metadata = [app for app in metadata if app['active']]
+    for app in active_metadata:
         app['last_ingestion'] = INGESTION_TIMESTAMP.strftime('%Y-%m-%d')
-    bronze_metadata_blob.upload_from_string(json.dumps(metadata, ensure_ascii=False, indent=4), content_type='application/json')
-    LOGGER.info(f"Updated bronze metadata with {len(metadata)} apps")
+    bronze_metadata_blob.upload_from_string(json.dumps(active_metadata, ensure_ascii=False, indent=4), content_type='application/json')
+    LOGGER.info(f"Updated bronze metadata with {len(active_metadata)} apps")
 
     if landing_metadata_blob.exists():
         landing_metadata_blob.delete()
