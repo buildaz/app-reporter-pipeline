@@ -1,0 +1,4 @@
+dateparser==1.2.2
+serpapi==0.1.5
+PyYAML==6.0.2
+google-cloud-storage==3.3.0
