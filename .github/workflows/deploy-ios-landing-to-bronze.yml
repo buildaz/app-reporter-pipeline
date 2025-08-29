@@ -5,14 +5,14 @@ on:
     branches:
       - main
     paths:
-      - 'data_jobs/android_landing_to_bronze/**'
+      - 'data_jobs/ios_landing_to_bronze/**'
   workflow_dispatch:
 
 env:
   PROJECT_ID: site-reporter-436515
   REGION: southamerica-east1
   REPO: app-reporter-artifacts
-  IMAGE_NAME: app-reporter-android-landing-to-bronze
+  IMAGE_NAME: app-reporter-ios-landing-to-bronze
   RUNTIME: dev
 
 jobs:
@@ -41,14 +41,14 @@ jobs:
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
       - name: Build and Push Docker Image
-        working-directory: data_jobs/android_landing_to_bronze
+        working-directory: data_jobs/ios_landing_to_bronze
         run: |
           docker build -t $IMAGE_NAME:latest .
           docker tag $IMAGE_NAME:latest $REGION-docker.pkg.dev/$PROJECT_ID/$REPO/$IMAGE_NAME:latest
           docker push $REGION-docker.pkg.dev/$PROJECT_ID/$REPO/$IMAGE_NAME:latest
 
       - name: Deploy Cloud Run Job
-        working-directory: data_jobs/android_landing_to_bronze
+        working-directory: data_jobs/ios_landing_to_bronze
         env:
           RUNTIME: ${{ env.RUNTIME }}
         run: |

@@ -1,0 +1,7 @@
+ios_landing_to_bronze:
+  landing_bucket:
+    dev: buildaz-app-reporter-landing-dev
+  bronze_bucket:
+    dev: buildaz-app-reporter-bronze-dev
+  bucket_prefix: ios_reviews
+  bronze_metadata: ios_apps/bronze_metadata.json

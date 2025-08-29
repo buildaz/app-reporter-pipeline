@@ -36,16 +36,16 @@ if __name__ == '__main__':
     for app in bronze_metadata:
         app_last_ingestion = app['last_ingestion']
         app_reviews_blob = LANDING_BUCKET.blob(
-            f'{BUCKET_PREFIX}/{app_last_ingestion}/{app["id"]}_{app["country"]}_{app["lang"]}.json'
+            f'{BUCKET_PREFIX}/{app_last_ingestion}/{app["id"]}_{app["country"]}.json'
         )
         app_reviews = pd.json_normalize(json.loads(app_reviews_blob.download_as_string()), max_level=1)
         if app_reviews.empty:
             LOGGER.info(f'No reviews found for {app["name"]} ({app["id"]})')
             continue
         LOGGER.info(f'Found {len(app_reviews)} reviews for {app["name"]} ({app["id"]}) at ingestion {app_last_ingestion}')
-        parquet_path = f'gs://{CONFIG["bronze_bucket"][os.getenv("RUNTIME", "dev")]}/{BUCKET_PREFIX}/{app_last_ingestion}/{app["id"]}_{app["country"]}_{app["lang"]}.parquet'
+        parquet_path = f'gs://{CONFIG["bronze_bucket"][os.getenv("RUNTIME", "dev")]}/{BUCKET_PREFIX}/{app_last_ingestion}/{app["id"]}_{app["country"]}.parquet'
         app_reviews.to_parquet(parquet_path, index=False)
-        LOGGER.info(f'Uploaded {len(app_reviews)} reviews for {app["name"]} ({app["id"]} → {app["country"]}-{app["lang"]}) to {parquet_path}')
+        LOGGER.info(f'Uploaded {len(app_reviews)} reviews for {app["name"]} ({app["id"]} → {app["country"]}) to {parquet_path}')
 
     landing_reviews_folder_blobs = LANDING_BUCKET.list_blobs(prefix=f'{BUCKET_PREFIX}/')
     for review_blob in landing_reviews_folder_blobs:
