@@ -1,0 +1,20 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: app-reporter-ios-landing-to-bronze
+  namespace: site-reporter-436515
+  labels:
+    cloud.googleapis.com/location: southamerica-east1
+spec:
+  template:
+    spec:
+      template:
+        spec:
+          containers:
+          - image: southamerica-east1-docker.pkg.dev/site-reporter-436515/app-reporter-artifacts/app-reporter-ios-landing-to-bronze:latest
+            env:
+              - name: RUNTIME
+                value: ${RUNTIME}
+            resources:
+              limits:
+                memory: 2Gi

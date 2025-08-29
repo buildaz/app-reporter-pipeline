@@ -1,4 +1,4 @@
-# Android Ingestion Job - Local/Dev Execution
+# iOS Ingestion Job - Local/Dev Execution
 
 1. Export `GOOGLE_APPLICATION_CREDENTIALS` in your terminal session.
 
@@ -23,5 +23,5 @@ export $(cat .env | xargs)
 with the dependencies specified at the project root folder's `requirements.txt`.
 
 ```bash
-python android_ingestion.py
+python /path/to/script.py
 ```

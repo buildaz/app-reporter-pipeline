@@ -85,7 +85,7 @@ if __name__ == '__main__':
                 break
             page += 1
         if all_reviews:
-            blob_path = f"{BUCKET_PREFIX}/{app['id']}_{app['country']}_{INGESTION_TIMESTAMP.strftime('%Y%m%d_%H%M%S')}.json"
+            blob_path = f"{BUCKET_PREFIX}/{INGESTION_TIMESTAMP.strftime('%Y-%m-%d')}/{app['id']}_{app['country']}.json"
             blob = LANDING_BUCKET.blob(blob_path)
             blob.upload_from_string(json.dumps(all_reviews), content_type='application/json')
             LOGGER.info(f'Uploaded {len(all_reviews)} reviews for {app["name"]} ({app["id"]}) to {blob_path}')
